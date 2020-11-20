@@ -102,8 +102,8 @@ def ConvertVOCXml(file_path="", file_name=""):
                             difficult = doc.createElement('difficult')
 
                             vehicle_type = target_child.attrib["vehicle_type"]
-                            if vehicle_type not in vehicle_types:
-                                vehicle_types.append(vehicle_type)
+                            #  if vehicle_type not in vehicle_types:
+                            #      vehicle_types.append(vehicle_type)
                             name.appendChild(doc.createTextNode(vehicle_type))
                             pose.appendChild(doc.createTextNode("Left"))  #随意指定
                             truncated.appendChild(
@@ -124,9 +124,13 @@ def ConvertVOCXml(file_path="", file_name=""):
                     annotation.appendChild(object)
 
             file_path_out = os.path.join(file_path, output_file_name)
-            f = open(file_path_out, 'w')
-            f.write(doc.toprettyxml(indent=' ' * 4))
-            f.close()
+            # f = open(file_path_out, 'w')
+            # f.write(doc.toprettyxml(indent='4'))
+            # f.close()
+            with open(file_path_out, "w", encoding="utf-8") as f:
+               # 4.writexml()第一个参数是目标文件对象，第二个参数是根节点的缩进格式，第三个参数是其他子节点的缩进格式，
+               # 第四个参数制定了换行格式，第五个参数制定了xml内容的编码。
+               doc.writexml(f, indent='', addindent='\t', newl='\n', encoding="utf-8")
             num = num + 1
     return num
 
@@ -212,7 +216,8 @@ if (__name__ == "__main__"):
     total_num = 0
     flag = False
     print("正在转换")
-    saveBasePath = root + "xml_test"
+    #  saveBasePath = root + "xml_test"
+    saveBasePath = "F:\\DataSets\\UA_DETRAC\\VOC2007\\Annotations"
     if os.path.exists(saveBasePath) == False:  #判断文件夹是否存在
         os.makedirs(saveBasePath)
 
@@ -221,7 +226,7 @@ if (__name__ == "__main__"):
     #  log = open(root + "xml_test\\xml_statistical.txt", "w")  #分析日志，进行排错
     each_process_totalxml = []
     for each in range(0,cpu_count()):
-       each_process_totalxml.append([])
+        each_process_totalxml.append([])
     for index in range(0, len(totalxml)):
         each_process_totalxml[index % cpu_count()].append(totalxml[index])
 
