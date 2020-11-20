@@ -1,128 +1,141 @@
-
-
 import xml.etree.ElementTree as ET
 from xml.dom.minidom import Document
 import os
 import cv2
 import time
+import threading
+from multiprocessing import cpu_count
 
-def ConvertVOCXml(file_path="",file_name=""):
-   tree = ET.parse(file_name)
-   root = tree.getroot()
-   # print(root.tag)
+vehicle_types = []
+def ConvertVOCXml(file_path="", file_name=""):
+    global vehicle_types
+    tree = ET.parse(file_name)
+    root = tree.getroot()
+    # print(root.tag)
+    num = 0  #计数
+    #读xml操作
 
-   num=0 #计数
-   #读xml操作
+    frame_lists = []
+    output_file_name = ""
+    for child in root:
 
-   frame_lists=[]
-   output_file_name=""
-   for child in root:
+        if (child.tag == "frame"):
+            # 创建dom文档
+            doc = Document()
+            # 创建根节点
+            annotation = doc.createElement('annotation')
+            # 根节点插入dom树
+            doc.appendChild(annotation)
 
-      if(child.tag=="frame"):
-          # 创建dom文档
-         doc = Document()
-         # 创建根节点
-         annotation = doc.createElement('annotation')
-         # 根节点插入dom树
-         doc.appendChild(annotation)
+            #print(child.tag, child.attrib["num"])
+            pic_id = child.attrib["num"].zfill(5)
+            #print(pic_id)
+            output_file_name = root.attrib["name"] + "__img" + pic_id + ".xml"
+            #  print(output_file_name)
 
-         #print(child.tag, child.attrib["num"])
-         pic_id= child.attrib["num"].zfill(5)
-         #print(pic_id)
-         output_file_name=root.attrib["name"]+"__img"+pic_id+".xml"
-        #  print(output_file_name)
+            folder = doc.createElement("folder")
+            folder.appendChild(doc.createTextNode("VOC2007"))
+            annotation.appendChild(folder)
 
-         folder = doc.createElement("folder")
-         folder.appendChild(doc.createTextNode("VOC2007"))
-         annotation.appendChild(folder)
+            filename = doc.createElement("filename")
+            pic_name = root.attrib["name"] + "__img" + pic_id + ".jpg"
+            filename.appendChild(doc.createTextNode(pic_name))
+            annotation.appendChild(filename)
 
-         filename = doc.createElement("filename")
-         pic_name=root.attrib["name"]+"__img"+pic_id+".jpg"
-         filename.appendChild(doc.createTextNode(pic_name))
-         annotation.appendChild(filename)
+            sizeimage = doc.createElement("size")
+            imagewidth = doc.createElement("width")
+            imageheight = doc.createElement("height")
+            imagedepth = doc.createElement("depth")
 
-         sizeimage = doc.createElement("size")
-         imagewidth = doc.createElement("width")
-         imageheight = doc.createElement("height")
-         imagedepth = doc.createElement("depth")
+            imagewidth.appendChild(doc.createTextNode("960"))
+            imageheight.appendChild(doc.createTextNode("540"))
+            imagedepth.appendChild(doc.createTextNode("3"))
 
-         imagewidth.appendChild(doc.createTextNode("960"))
-         imageheight.appendChild(doc.createTextNode("540"))
-         imagedepth.appendChild(doc.createTextNode("3"))
+            sizeimage.appendChild(imagedepth)
+            sizeimage.appendChild(imagewidth)
+            sizeimage.appendChild(imageheight)
+            annotation.appendChild(sizeimage)
 
-         sizeimage.appendChild(imagedepth)
-         sizeimage.appendChild(imagewidth)
-         sizeimage.appendChild(imageheight)
-         annotation.appendChild(sizeimage)
+            target_list = child.getchildren()[0]  #获取target_list
+            #print(target_list.tag)
+            object = None
+            for target in target_list:
+                if (target.tag == "target"):
+                    #print(target.tag)
+                    object = doc.createElement('object')
+                    bndbox = doc.createElement("bndbox")
 
-         target_list=child.getchildren()[0]  #获取target_list
-         #print(target_list.tag)
-         object=None
-         for target in target_list:
-             if(target.tag=="target"):
-                 #print(target.tag)
-                 object = doc.createElement('object')
-                 bndbox = doc.createElement("bndbox")
+                    for target_child in target:
+                        if (target_child.tag == "box"):
+                            xmin = doc.createElement("xmin")
+                            ymin = doc.createElement("ymin")
+                            xmax = doc.createElement("xmax")
+                            ymax = doc.createElement("ymax")
+                            xmin_value = int(
+                               float(target_child.attrib["left"]))
+                            ymin_value = int(float(target_child.attrib["top"]))
+                            box_width_value = int(
+                               float(target_child.attrib["width"]))
+                            box_height_value = int(
+                               float(target_child.attrib["height"]))
+                            xmin.appendChild(
+                               doc.createTextNode(str(xmin_value)))
+                            ymin.appendChild(
+                               doc.createTextNode(str(ymin_value)))
+                            if (xmin_value + box_width_value > 960):
+                                xmax.appendChild(doc.createTextNode(str(960)))
+                            else:
+                                xmax.appendChild(
+                                   doc.createTextNode(
+                                         str(xmin_value + box_width_value)))
+                            if (ymin_value + box_height_value > 540):
+                                ymax.appendChild(doc.createTextNode(str(540)))
+                            else:
+                                ymax.appendChild(
+                                   doc.createTextNode(
+                                         str(ymin_value + box_height_value)))
 
-                 for target_child in target:
-                     if(target_child.tag=="box"):
-                         xmin = doc.createElement("xmin")
-                         ymin = doc.createElement("ymin")
-                         xmax = doc.createElement("xmax")
-                         ymax = doc.createElement("ymax")
-                         xmin_value=int(float(target_child.attrib["left"]))
-                         ymin_value=int(float(target_child.attrib["top"]))
-                         box_width_value=int(float(target_child.attrib["width"]))
-                         box_height_value=int(float(target_child.attrib["height"]))
-                         xmin.appendChild(doc.createTextNode(str(xmin_value)))
-                         ymin.appendChild(doc.createTextNode(str(ymin_value)))
-                         if(xmin_value+box_width_value>960):
-                            xmax.appendChild(doc.createTextNode(str(960)))
-                         else:
-                            xmax.appendChild(doc.createTextNode(str(xmin_value+box_width_value)))
-                         if(ymin_value+box_height_value>540):
-                            ymax.appendChild(doc.createTextNode(str(540)))
-                         else:
-                            ymax.appendChild(doc.createTextNode(str(ymin_value+box_height_value)))
+                        if (target_child.tag == "attribute"):
+                            name = doc.createElement('name')
+                            pose = doc.createElement('pose')
+                            truncated = doc.createElement('truncated')
+                            difficult = doc.createElement('difficult')
 
-                     if(target_child.tag=="attribute"):
-                         name = doc.createElement('name')
-                         pose=doc.createElement('pose')
-                         truncated=doc.createElement('truncated')
-                         difficult=doc.createElement('difficult')
+                            vehicle_type = target_child.attrib["vehicle_type"]
+                            if vehicle_type not in vehicle_types:
+                                vehicle_types.append(vehicle_type)
+                            name.appendChild(doc.createTextNode(vehicle_type))
+                            pose.appendChild(doc.createTextNode("Left"))  #随意指定
+                            truncated.appendChild(
+                               doc.createTextNode("0"))  #随意指定
+                            difficult.appendChild(
+                               doc.createTextNode("0"))  #随意指定
 
-                         name.appendChild(doc.createTextNode("car"))
-                         pose.appendChild(doc.createTextNode("Left"))  #随意指定
-                         truncated.appendChild(doc.createTextNode("0"))  #随意指定
-                         difficult.appendChild(doc.createTextNode("0"))  #随意指定
+                            object.appendChild(name)
+                            object.appendChild(pose)
+                            object.appendChild(truncated)
+                            object.appendChild(difficult)
 
-                         
-                         object.appendChild(name)
-                         object.appendChild(pose)
-                         object.appendChild(truncated)
-                         object.appendChild(difficult)
-                         
-                 bndbox.appendChild(xmin)
-                 bndbox.appendChild(ymin)
-                 bndbox.appendChild(xmax)
-                 bndbox.appendChild(ymax)
-                 object.appendChild(bndbox)
-                 annotation.appendChild(object)
+                    bndbox.appendChild(xmin)
+                    bndbox.appendChild(ymin)
+                    bndbox.appendChild(xmax)
+                    bndbox.appendChild(ymax)
+                    object.appendChild(bndbox)
+                    annotation.appendChild(object)
 
-
-         file_path_out=os.path.join(file_path,output_file_name)
-         f = open(file_path_out, 'w')
-         f.write(doc.toprettyxml(indent=' ' * 4))
-         f.close()
-         num=num+1
-   return num
-
-
+            file_path_out = os.path.join(file_path, output_file_name)
+            f = open(file_path_out, 'w')
+            f.write(doc.toprettyxml(indent=' ' * 4))
+            f.close()
+            num = num + 1
+    return num
 
 
 '''
 画方框
 '''
+
+
 def bboxes_draw_on_img(img, bbox, color=[255, 0, 0], thickness=2):
 
     # Draw bounding box...
@@ -132,79 +145,105 @@ def bboxes_draw_on_img(img, bbox, color=[255, 0, 0], thickness=2):
     cv2.rectangle(img, p1, p2, color, thickness)
 
 
-def visualization_image(image_name,xml_file_name):
+def visualization_image(image_name, xml_file_name):
     tree = ET.parse(xml_file_name)
     root = tree.getroot()
 
-    object_lists=[]
+    object_lists = []
     for child in root:
-       if(child.tag=="folder"):
-          print(child.tag, child.text)
-       elif (child.tag == "filename"):
-          print(child.tag, child.text)
-       elif (child.tag == "size"):  #解析size
-          for size_child in child:
-             if(size_child.tag=="width"):
-                print(size_child.tag,size_child.text)
-             elif (size_child.tag == "height"):
-                print(size_child.tag, size_child.text)
-             elif (size_child.tag == "depth"):
-                print(size_child.tag, size_child.text)
-       elif (child.tag == "object"):  #解析object
-          singleObject={}
-          for object_child in child:
-             if (object_child.tag == "name"):
-                # print(object_child.tag,object_child.text)
-                singleObject["name"] = object_child.text
-             elif (object_child.tag == "bndbox"):
-                for bndbox_child in object_child:
-                   if (bndbox_child.tag == "xmin"):
-                      singleObject["xmin"] = bndbox_child.text
-                      # print(bndbox_child.tag, bndbox_child.text)
-                   elif (bndbox_child.tag == "ymin"):
-                      # print(bndbox_child.tag, bndbox_child.text)
-                      singleObject["ymin"] = bndbox_child.text
-                   elif (bndbox_child.tag == "xmax"):
-                      singleObject["xmax"] = bndbox_child.text
-                   elif (bndbox_child.tag == "ymax"):
-                      singleObject["ymax"] = bndbox_child.text
-          object_length=len(singleObject)
-          if(object_length>0):
-          	object_lists.append(singleObject)
+        if (child.tag == "folder"):
+            print(child.tag, child.text)
+        elif (child.tag == "filename"):
+            print(child.tag, child.text)
+        elif (child.tag == "size"):  #解析size
+            for size_child in child:
+                if (size_child.tag == "width"):
+                    print(size_child.tag, size_child.text)
+                elif (size_child.tag == "height"):
+                    print(size_child.tag, size_child.text)
+                elif (size_child.tag == "depth"):
+                    print(size_child.tag, size_child.text)
+        elif (child.tag == "object"):  #解析object
+            singleObject = {}
+            for object_child in child:
+                if (object_child.tag == "name"):
+                    # print(object_child.tag,object_child.text)
+                    singleObject["name"] = object_child.text
+                elif (object_child.tag == "bndbox"):
+                    for bndbox_child in object_child:
+                        if (bndbox_child.tag == "xmin"):
+                            singleObject["xmin"] = bndbox_child.text
+                            # print(bndbox_child.tag, bndbox_child.text)
+                        elif (bndbox_child.tag == "ymin"):
+                            # print(bndbox_child.tag, bndbox_child.text)
+                            singleObject["ymin"] = bndbox_child.text
+                        elif (bndbox_child.tag == "xmax"):
+                            singleObject["xmax"] = bndbox_child.text
+                        elif (bndbox_child.tag == "ymax"):
+                            singleObject["ymax"] = bndbox_child.text
+            object_length = len(singleObject)
+            if (object_length > 0):
+                object_lists.append(singleObject)
     img = cv2.imread(image_name)
     for object_coordinate in object_lists:
-        bboxes_draw_on_img(img,object_coordinate)
+        bboxes_draw_on_img(img, object_coordinate)
     cv2.imshow("capture", img)
-    cv2.waitKey (0)
+    cv2.waitKey(0)
     cv2.destroyAllWindows()
 
 
-if ( __name__ == "__main__"):
-   #print("main")
-   basePath="DETRAC-Train-Annotations-XML"
-   totalxml=os.listdir(basePath)
-   total_num=0
-   flag=False
-   print("正在转换")
-   saveBasePath="xml_test"
-   if os.path.exists(saveBasePath)==False: #判断文件夹是否存在
+def parser_xml(totalxml, base_path):
+    global total_num
+    for xml in totalxml:
+        file_name = os.path.join(basePath, xml)
+        print(file_name)
+        num = ConvertVOCXml(file_path=saveBasePath, file_name=file_name)
+        print(num)
+        total_num = total_num + num
+    #   log.write(file_name + " " + str(num) + "\n")
+
+
+if (__name__ == "__main__"):
+
+    #print("main")
+    root = "F:\\DataSets\\UA_DETRAC\\"
+    basePath = root + "DETRAC-Train-Annotations-XML-v3"
+    totalxml = os.listdir(basePath)
+    total_num = 0
+    flag = False
+    print("正在转换")
+    saveBasePath = root + "xml_test"
+    if os.path.exists(saveBasePath) == False:  #判断文件夹是否存在
         os.makedirs(saveBasePath)
 
-   #ConvertVOCXml(file_path="samplexml",file_name="000009.xml")
-   # Start time
-   start = time.time()
-   log=open("xml_statistical.txt","w") #分析日志，进行排错
-   for xml in totalxml:
-     file_name=os.path.join(basePath,xml)
-     print(file_name)
-     num=ConvertVOCXml(file_path=saveBasePath,file_name=file_name)
-     print(num)
-     total_num=total_num+num
-     log.write(file_name+" "+str(num)+"\n")
-   # End time
-   end = time.time()
-   seconds=end-start
-   print( "Time taken : {0} seconds".format(seconds))
-   print(total_num)
-   log.write(str(total_num)+"\n")
-   visualization_image("Insight-MVT_Annotation_Train/MVI_40212/img00396.jpg","xml_test/MVI_40212__img00396.xml")
+    # Start time
+    start = time.time()
+    #  log = open(root + "xml_test\\xml_statistical.txt", "w")  #分析日志，进行排错
+    each_process_totalxml = []
+    for each in range(0,cpu_count()):
+       each_process_totalxml.append([])
+    for index in range(0, len(totalxml)):
+        each_process_totalxml[index % cpu_count()].append(totalxml[index])
+
+    thread =[]
+    for each in each_process_totalxml:
+        t = threading.Thread(target=parser_xml,args=(each,basePath,))
+        thread.append(t)
+    for t in thread:
+        t.start()
+
+    # End time
+    end = time.time()
+    seconds = end - start
+    print("Time taken : {0} seconds".format(seconds))
+    print(total_num)
+    output_file = open("vehicle_type.txt", "w")
+    for vehicle_type in vehicle_types:
+        output_file.write(vehicle_type+'\n')
+    output_file.close()
+
+    #  log.write(str(total_num) + "\n")
+    #  visualization_image(
+    #     root +
+    #     "DETRAC-train-data/Insight-MVT_Annotation_Train/MVI_40212/img00396.jpg",
+    #     root + "xml_test/MVI_40212__img00396.xml")
